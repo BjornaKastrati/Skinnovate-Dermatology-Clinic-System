@@ -1,3 +1,5 @@
+[View Feature Display](https://bjornakastrati.github.io/Skinnovate-Dermatology-Clinic-System/FeatureDisplay.html)
+
 # Skinnovate — AI-Powered Dermatology Platform
 
 Skinnovate is a full-stack web application for a dermatology clinic featuring AI skin analysis, doctor validation, appointment management, and electronic health records.
