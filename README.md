@@ -1,7 +1,6 @@
 # Skinnovate — AI-Powered Dermatology Platform
 
-A full-stack web application for a dermatology clinic featuring AI skin analysis, doctor validation, appointment management, and electronic health records.
-
+Skinnovate is a full-stack web application for a dermatology clinic featuring AI skin analysis, doctor validation, appointment management, and electronic health records.
 ---
 
 ## Tech Stack
@@ -10,8 +9,8 @@ A full-stack web application for a dermatology clinic featuring AI skin analysis
 |-----------|----------------------------------------------|
 | Frontend  | React 18, React Router 6, Vite, CSS Modules  |
 | Backend   | Flask 3, Flask-JWT-Extended, Flask-SQLAlchemy|
-| Database  | PostgreSQL 16                                |
-| AI        | TensorFlow / Keras (with mock fallback)      |
+| Database  | PostgreSQL                                   |
+| AI        | TensorFlow / Keras                           |
 | Auth      | JWT (access + refresh tokens), bcrypt        |
 
 ---
@@ -46,6 +45,8 @@ skinnovate/
 │   │   ├── services/
 │   │   │   ├── auth_service.py      # JWT + bcrypt logic
 │   │   │   └── ai_service/
+│   │   │       ├── model/
+│   │   │           └── skin_model.keras 
 │   │   │       ├── preprocessor.py  # Image pipeline (resize/normalise)
 │   │   │       └── predictor.py     # Model inference + mock fallback
 │   │   ├── middleware/
@@ -211,38 +212,63 @@ npm run dev
 
 ## AI Integration
 
-The AI service converts a Jupyter notebook model into a production callable:
+## AI Integration
+
+The AI part of Skinnovate started as a Jupyter Notebook project and was later connected to the Flask backend so it could be used inside the web application.
+In the notebook, we tested different image preprocessing pipelines and compared how they affected the model’s performance. The general workflow was:
+
+```
+Dataset Collection
+↓
+Image Cleaning and Class Organization
+↓
+Preprocessing Pipeline Testing
+- No preprocessing
+- CLAHE only
+- Gaussian + CLAHE
+- Bilateral + CLAHE
+- Unsharp Mask + CLAHE
+↓
+Model Training and Evaluation
+↓
+Best Pipeline Selection
+↓
+Model Export as .keras file
+↓
+Integration with Flask API
+```
+
+The selected preprocessing pipeline was **Unsharp Mask + CLAHE**, because it helped improve image clarity while preserving important skin details.
+The production AI flow is:
 
 ```
 Image Upload (multipart/form-data)
-    ↓
+↓
 preprocessor.py
-  - Open & convert to RGB
-  - EXIF auto-rotation
-  - Resize to 224×224 (Lanczos)
-  - Normalise [0,1] → ImageNet mean/std
-  - Add batch dim → (1, 224, 224, 3)
-    ↓
+
+-Open image
+-Convert image to RGB
+-Resize image to 224×224
+-Apply Unsharp Mask for sharpening
+-Apply CLAHE for contrast enhancement
+-Normalize pixel values to [0, 1]
+-Add batch dimension → (1, 224, 224, 3)
+↓
 predictor.py
-  - Load model once (singleton via _load_model)
-  - model.predict(array)
-  - Extract top-k predictions
-  - Apply severity map
-  - Flag requires_consultation if confidence < 0.70 OR severity == "high"
-    ↓
-AIDiagnosis saved to DB
-    ↓
-Doctor Validation (PATCH /api/analysis/:id/validate)
+-Load the trained .keras model once
+-Send processed image to model.predict()
+-Extract prediction result and confidence score
+-Apply confidence threshold
+-Flag requires_consultation if confidence is low or the condition requires medical attention
+↓
+AIDiagnosis saved to database
+↓
+Doctor Validation
+PATCH /api/analysis/:id/validate
 ```
 
-**To plug in your real model:**
-1. Copy your `.h5` file to `backend/app/services/ai_service/model/skin_model.h5`
-2. Set `AI_MODEL_PATH` in `.env`
-3. Adjust `CONDITION_LABELS` in `predictor.py` to match your training labels
-
-When no model file exists, a deterministic mock predictor is used automatically (safe for development).
-
----
+## Disclaimer
+The AI model is used to support skin condition analysis, but it does not replace a real dermatologist. It does not provide professional medical diagnosis or treatment advice. The result is presented with a confidence score and should be treated as an educational/supportive prediction, not as a final medical diagnosis.
 
 ## Key Design Decisions
 
@@ -251,6 +277,5 @@ When no model file exists, a deterministic mock predictor is used automatically 
 - **Role-based access** via `@role_required` decorator — no logic leaks between roles
 - **Standardised responses** — every endpoint returns `{ success, message, data }` or `{ error }`
 - **AI singleton** — model loaded once at startup, not per-request
-- **Mock AI fallback** — deterministic mock when model file absent; zero config for dev
 - **CSS Modules** — every component has a colocated `.module.css`; zero global conflicts
 - **AuthContext + axios interceptor** — transparent token refresh on 401
